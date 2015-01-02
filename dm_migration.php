@@ -251,6 +251,260 @@ class DailyMakeover_Migration extends WP_CLI_Command {
     }
 
     /**
+     * Makes a XML file with list of hairtyles for wordpress importing
+     *
+     * ## OPTIONS
+     *
+     * --xmlfilename
+     * : File name of an output XML. Default is "wordpress_hairstyles.xml"
+     *
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration make_hairstyles_xml --xmlfilename=/home/user/file.xml
+     *
+     * @synopsis <inputfile> [--outputfile=<filename>] [--termscsvpath=<termscsvpath>] [--datescsvpath=<datescsvpath>]
+     */
+    public function make_hairstyles_xml( $args, $assoc_args ) {
+        list( $inputfile ) = $args;
+        $outputfile_path = ( isset( $assoc_args['outputfile'] ) ) ? $assoc_args['outputfile'] : 'wordpress_hairstyles.xml';
+        $terms_csv_path  = ( isset( $assoc_args['termscsvpath'] ) ) ? $assoc_args['termscsvpath'] : 'hairstyles.csv';
+        $dates_csv_path  = ( isset( $assoc_args['datescsvpath'] ) ) ? $assoc_args['datescsvpath'] : 'hairstyles_dates.csv';
+        
+        $xml = new DOMDocument();
+        $xml->load( $inputfile );
+
+        $terms_csv_stream = fopen( $terms_csv_path, 'r' );
+        $dates_csv_stream = fopen( $dates_csv_path, 'r' );
+        
+        //Initialize associative array of terms
+        $terms_array = array();
+        while ( ! feof( $terms_csv_stream ) ) {
+            $fields = fgetcsv( $terms_csv_stream );
+            $terms_array[ $fields[0] ] = $fields;
+        }
+
+        fclose( $terms_csv_stream );
+        
+        //Initialize assocoative array of dates
+        $dates_array = array();
+        while ( ! feof( $dates_csv_stream ) ) {
+            $fields = fgetcsv( $dates_csv_stream );
+            $dates_array[ $fields[0] ] = $fields;
+        }
+        
+        fclose( $dates_csv_stream );
+        
+        $warnings_count = 0;
+        
+        //Get the generator DOM for terms insertion before him (will be after authors)
+        $generator_dom = $xml->getElementsByTagName( 'generator' )->item( 0 );
+        
+        $add_term_definition = function( $document, $generator, $id, $taxonomy, $slug, $parent_slug, $name ) {
+            //Define the term_id DOM
+            $term_definition_id_dom = $document->createElement( 'wp:term_id', $id );
+
+            //Define the term_taxonomy DOM
+            $term_definition_taxonomy_dom = $document->createElement( 'wp:term_taxonomy', $taxonomy );
+
+            //Define the term_slug DOM
+            $term_definition_slug_dom = $document->createElement( 'wp:term_slug', $slug ); //Generate slug from the new name
+
+            //Define the term_parent DOM
+            $term_definition_parent_dom = $document->createElement( 'wp:term_parent', $parent_slug );
+
+            //Define the term_name DOM
+            $cdata_term_name_section = new DOMCdataSection( $name );
+            $term_definition_name_dom = $document->createElement( 'wp:term_name' );
+            //Add CDATA section to term_name
+            $term_definition_name_dom->appendChild( $cdata_term_name_section );
+
+            //Add all definitions to the main DOM
+            $term_definition_main_dom = $document->createElement( 'wp:term' );
+            $term_definition_main_dom->appendChild( $term_definition_id_dom );
+            $term_definition_main_dom->appendChild( $term_definition_taxonomy_dom );
+            $term_definition_main_dom->appendChild( $term_definition_slug_dom );
+            $term_definition_main_dom->appendChild( $term_definition_parent_dom );
+            $term_definition_main_dom->appendChild( $term_definition_name_dom );
+
+            $generator->parentNode->insertBefore( $term_definition_main_dom, $generator );
+        };
+        
+        $get_not_date_term_taxonomy = function( $is_celebrity, $is_style, $is_event ) {
+            switch ( true ) {
+                case $is_celebrity :
+                    return 'celebrity_hairstyle_category';
+                case $is_style :
+                    return 'style_hairstyle_category';
+                case $is_event :
+                    return 'event_hairstyle_category';
+            }
+            return '';
+        };
+        
+        $terms_id_by_slug = array();
+        
+        //Add terms definitions in XML after authors (without dates)
+        foreach( $terms_array as $term_id => $term_fields_array ) {
+            list( $csv_term_id, $csv_term_oldname, $csv_term_iscelebrity, $csv_term_isstyle, $csv_term_isevent, $csv_term_newname ) = $term_fields_array;
+            
+            //Get taxonomy of the term
+            $term_taxonomy = $get_not_date_term_taxonomy( $get_not_date_term_taxonomy, $csv_term_isstyle, $csv_term_isevent );
+
+            $slug = sanitize_title_with_dashes( $csv_term_newname );
+            $add_term_definition( $xml, $generator_dom, $csv_term_id, $term_taxonomy, sanitize_title_with_dashes( $csv_term_newname ), '', $csv_term_newname );
+            $terms_id_by_slug[ $slug ] = $term_id;
+            
+            WP_CLI::success( sprintf( 'Term with %s id has successfully added to the definitions', $csv_term_id ) );
+        }
+
+        $get_day_parent = function( $used_months_slugs, $month, $year ) {
+            if ( in_array( $month . '-' . $year, $used_months_slugs ) ) {
+                return sanitize_title_with_dashes( $month . '-' . $year );
+            }
+            if ( in_array( $month, $used_months_slugs ) ) {
+                return sanitize_title_with_dashes( $month );
+            }
+            return null;
+        };
+        
+        $used_days_slugs   = array();
+        $used_months_slugs = array();
+        $used_years_slugs  = array();
+        
+        //Add dates terms definitions right before the generator DOM
+        foreach ( $dates_array as $date_id => $date_fields_array ) {
+            list( $csv_post_id, $csv_post_title, $csv_day, $csv_month, $csv_year ) = $date_fields_array;
+            
+            //Process the year
+            if ( ! in_array( $csv_year, $used_years_slugs ) ) {
+                $add_term_definition( $xml, $generator_dom, '', 'date_hairstyle_category', sanitize_title_with_dashes( $csv_year ), '', $csv_year );
+                $used_years_slugs[] = $csv_year;
+
+                WP_CLI::success( sprintf( 'Year term with %s slug has successfully added to the definitions', $csv_year ) );
+            }
+            
+            //Process the month. Slug can be like 04-2010 or just 04
+            if ( in_array( $csv_month, $used_months_slugs ) && ! in_array( $csv_month . '-' . $csv_year, $used_months_slugs ) ) {
+                $month_slug = $csv_month . '-' . $csv_year;
+                $add_term_definition( $xml, $generator_dom, '', 'date_hairstyle_category', sanitize_title_with_dashes( $month_slug ), $csv_year, $csv_month );
+                $used_months_slugs[] = $month_slug;
+
+                WP_CLI::success( sprintf( 'Month term with %s slug has successfully added to the definitions', $month_slug ) );
+            }
+            if ( ! in_array( $csv_month, $used_months_slugs ) ) {
+                $add_term_definition( $xml, $generator_dom, '', 'date_hairstyle_category', sanitize_title_with_dashes( $csv_month ), $csv_year, $csv_month );
+                $used_months_slugs[] = $csv_month;
+
+                WP_CLI::success( sprintf( 'Month term with %s slug has successfully added to the definitions', $csv_month ) );
+            }
+            
+            //Process the day. Slug can be like 01-01-2010 or just 01
+            if ( in_array( $csv_day, $used_days_slugs ) && ! in_array( $csv_day . '-' . $csv_month . '-' . $csv_year, $used_days_slugs ) ) {
+                $day_slug = $csv_day . '-' . $csv_month . '-' . $csv_year;
+                $day_parent_slug = $get_day_parent( $used_months_slugs, $csv_month, $csv_year );
+                
+                if ( ! $day_parent_slug ) {
+                    WP_CLI::warning( sprintf( 'Can\'t get the parent slug of day with %s slug', $day_slug ) );
+                    $warnings_count++;
+                }
+                
+                $add_term_definition( $xml, $generator_dom, '', 'date_hairstyle_category', sanitize_title_with_dashes( $day_slug ), $day_parent_slug, $csv_day );
+                $used_days_slugs[] = $day_slug;
+
+                WP_CLI::success( sprintf( 'Day term with %s slug has successfully added to the definitions', $day_slug ) );
+            }
+            if ( ! in_array( $csv_day, $used_days_slugs ) ) {
+                $day_parent_slug = $get_day_parent( $used_months_slugs, $csv_month, $csv_year );
+
+                if ( ! $day_parent_slug ) {
+                    WP_CLI::warning( sprintf( 'Can\'t get the parent slug has of day with %s slug', $csv_day ) );
+                    $warnings_count++;
+                }
+                
+                $add_term_definition( $xml, $generator_dom, '', 'date_hairstyle_category', sanitize_title_with_dashes( $csv_day ), $day_parent_slug, $csv_day );
+                $used_days_slugs[] = $csv_day;
+
+                WP_CLI::success( sprintf( 'Day term with %s slug has successfully added to the definitions', $csv_day ) );
+            }
+        }
+        
+        $set_term_dom = function( $term_dom, $taxonomy, $slug, $name ) {
+            $term_dom->setAttribute( 'domain', $taxonomy );
+            $term_dom->setAttribute( 'nicename', sanitize_title_with_dashes( $slug ) );
+
+            if ( $term_dom->firstChild ) {
+                //Remove old CDATA
+                $term_dom->removeChild($term_dom->firstChild);
+            }
+            $cdata_term_name_section = new DOMCdataSection( $name );
+            $term_dom->appendChild( $cdata_term_name_section );
+            
+            return $term_dom;
+        };
+
+        //Add terms to the posts
+        $posts_doms = $xml->getElementsByTagName( 'item' );
+        foreach ( $posts_doms as $post_dom ) {
+            $post_id = $post_dom->getElementsByTagName( 'post_id' )->item( 0 )->nodeValue;
+            
+            //Edit existing terms to new
+            $terms_doms = $post_dom->getElementsByTagName( 'category' );
+            foreach( $terms_doms as $term_dom ) {
+                $term_name = $term_dom->textContent;
+                $term_new_name = str_replace( ' Hairstyles', '', $term_name );
+                
+                $term_slug = sanitize_title_with_dashes( $term_new_name );
+                $term_id = $terms_id_by_slug[ $term_slug ];
+
+                list( $csv_term_id, $csv_term_oldname, $csv_term_iscelebrity, $csv_term_isstyle, $csv_term_isevent, $csv_term_newname ) = $terms_array[ $term_id ];
+
+                $taxonomy = $get_not_date_term_taxonomy( $csv_term_iscelebrity, $csv_term_isstyle, $csv_term_isevent );
+
+                $set_term_dom( $term_dom, $taxonomy, $term_slug, $term_new_name );
+            }
+
+            //Generate date term for the post
+            list( $csv_post_id, $csv_post_title, $csv_day, $csv_month, $csv_year ) = $dates_array[ $post_id ];
+            
+            //Get day slug
+            $day_slug = $csv_day . '-' . $csv_month . '-' . $csv_year;
+            if ( ! in_array( $day_slug, $used_days_slugs ) ) {
+                $day_slug = $csv_day;
+            }
+            
+            //Get month slug
+            $month_slug = $csv_month . '-' . $csv_year;
+            if ( ! in_array( $month_slug, $used_months_slugs ) ) {
+                $month_slug = $csv_month;
+            }
+            
+            //Get year slug
+            $year_slug = $csv_year;
+            
+            //Generate day term
+            $post_day_term_dom = $xml->createElement( 'category' );
+            $post_day_term_dom = $set_term_dom( $post_day_term_dom, 'date_hairstyle_category', $day_slug, $csv_day );
+            $post_dom->appendChild( $post_day_term_dom );
+            
+            //Generate month term
+            $post_month_term_dom = $xml->createElement( 'category' );
+            $post_month_term_dom = $set_term_dom( $post_month_term_dom, 'date_hairstyle_category', $month_slug, $csv_month );
+            $post_dom->appendChild( $post_month_term_dom );
+
+            //Generate year term
+            $post_year_term_dom = $xml->createElement( 'category' );
+            $post_year_term_dom = $set_term_dom( $post_year_term_dom, 'date_hairstyle_category', $year_slug, $csv_year );
+            $post_dom->appendChild( $post_year_term_dom );
+            
+            //Set new post type
+            $post_type_dom = $post_dom->getElementsByTagName( 'post_type' )->item( 0 );
+            $post_type_dom->nodeValue = 'celebrity_hairstyle';
+        }
+        
+        $xml->save( $outputfile_path );
+    }
+
+    /**
      * @return array
      */
     private function get_blogs_post_types_names() {
