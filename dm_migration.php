@@ -109,7 +109,7 @@ class DailyMakeover_Migration extends WP_CLI_Command {
      *
      * wp --require=dm_migration.php dm_migration get_array_of_users_with_posts 200 --path=/home/user/
      *
-     * @synopsis [<number>] [--path=<path>]
+     * @synopsis [<number>] [--pathtofile=<path>]
      */
     public function make_users_csv( $args, $assoc_args ) {
         $users = get_users( array( 'number' => isset( $args[0] ) ? $args[0] : '' ) );
@@ -126,8 +126,8 @@ class DailyMakeover_Migration extends WP_CLI_Command {
             'mobilegalleryimage'
         ) );
 
-        $users_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] . 'users_with_posts.csv' : 'users_with_posts.csv';
-        $users_meta_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] . 'users_with_posts_meta.csv' : 'users_with_posts_meta.csv';
+        $users_filepath = ( isset( $assoc_args['pathtofile'] ) ) ? $assoc_args['pathtofile'] . 'users_with_posts.csv' : 'users_with_posts.csv';
+        $users_meta_filepath = ( isset( $assoc_args['pathtofile'] ) ) ? $assoc_args['pathtofile'] . 'users_with_posts_meta.csv' : 'users_with_posts_meta.csv';
         
         $users_filestream = fopen( $users_filepath, 'w' );
         $users_meta_filestream = fopen( $users_meta_filepath, 'w' );
@@ -155,7 +155,7 @@ class DailyMakeover_Migration extends WP_CLI_Command {
                     $user->last_name
                 ) );
 
-                fputcsv( $users_meta_filestream, $user_meta );
+//                fputcsv( $users_meta_filestream, $user_meta );
 
                 WP_CLI::success( sprintf( 'User "%s" with %s posts has been added', $user->user_nicename, count( $posts_query->posts ) ) );
 
