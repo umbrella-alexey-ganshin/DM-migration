@@ -127,10 +127,8 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         ) );
 
         $users_filepath = ( isset( $assoc_args['pathtofile'] ) ) ? $assoc_args['pathtofile'] . 'users_with_posts.csv' : 'users_with_posts.csv';
-        $users_meta_filepath = ( isset( $assoc_args['pathtofile'] ) ) ? $assoc_args['pathtofile'] . 'users_with_posts_meta.csv' : 'users_with_posts_meta.csv';
         
         $users_filestream = fopen( $users_filepath, 'w' );
-        $users_meta_filestream = fopen( $users_meta_filepath, 'w' );
         
         $added_users_count = 0;
         
@@ -145,8 +143,6 @@ class DailyMakeover_Migration extends WP_CLI_Command {
             wp_reset_query();
             
             if ( ! empty( $posts_query->posts ) ) {
-                $user_meta = get_user_meta( $user->ID );
-                
                 fputcsv( $users_filestream, array(
                     $user->ID,
                     $user->user_login,
@@ -154,8 +150,6 @@ class DailyMakeover_Migration extends WP_CLI_Command {
                     $user->first_name,
                     $user->last_name
                 ) );
-
-//                fputcsv( $users_meta_filestream, $user_meta );
 
                 WP_CLI::success( sprintf( 'User "%s" with %s posts has been added', $user->user_nicename, count( $posts_query->posts ) ) );
 
