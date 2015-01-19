@@ -75,7 +75,7 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         $filepath = ( isset( $assoc_args['filepath'] ) ) ? $assoc_args['filepath'] : 'hairstyles.csv';
         $filestream = fopen( $filepath, 'w' );
         
-        $hairstyle_terms = get_terms( 'hairstyle_category' );
+        $hairstyle_terms = get_terms( 'hairstyle_category', array('hide_empty' => false) );
         foreach( $hairstyle_terms as $term ) {
             $term_new_name = $term->name;
             if ( strpos( $term_new_name, ' Hairstyles' ) ) {
