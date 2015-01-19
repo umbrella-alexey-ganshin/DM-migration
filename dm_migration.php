@@ -77,11 +77,16 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         
         $hairstyle_terms = get_terms( 'hairstyle_category' );
         foreach( $hairstyle_terms as $term ) {
-            $term_csv_representation = array( $term->term_id, $term->name, '', '', '', '' );
+            $term_new_name = $term->name;
+            if ( strpos( $term_new_name, ' Hairstyles' ) ) {
+                $term_new_name = str_replace( ' Hairstyles', '', $term_new_name );
+            }
+            
+            $term_csv_representation = array( $term->term_id, $term->name, '', '', '', $term_new_name );
             
             fputcsv( $filestream, $term_csv_representation );
             
-            WP_CLI::success( sprintf( 'Term with "%s" ID, "%s"', $term->term_id, $term->name ) );
+            WP_CLI::success( sprintf( 'Term with "%s" ID, "%s" name. Renamed to "%s".', $term->term_id, $term->name, $term_new_name ) );
         }
         
         fclose( $filestream );
