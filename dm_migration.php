@@ -21,7 +21,7 @@ class DailyMakeover_Migration extends WP_CLI_Command {
      *
      * ## OPTIONS
      *
-     * --name
+     * --username
      * : The MySQL user name to use when connecting to the server.
      * 
      * --port
@@ -37,13 +37,12 @@ class DailyMakeover_Migration extends WP_CLI_Command {
      * 
      * wp --require=dm_migration.php dm_migration copydb UserProducts UserProducts1 12345 --username=user --port=8080 --chroot=/home/ --host=localhost
      *
-     * @synopsis <backup_db_name> <copy_db_name> <db_password> [--username=<user_name>] [--host=<host>] [--port=<port>] [--chroot=<chroot>]
+     * @synopsis <backup_db_name> <copy_db_name> <db_password> [--username=<username>] [--host=<host>] [--port=<port>] [--chroot=<chroot>]
      */
     public function copydb( $args, $assoc_args ) {
         list( $backup_db_name, $copy_db_name, $db_password ) = $args;
         $user_name = isset( $assoc_args['username'] ) ? $assoc_args['username'] : 'root';
-        $shell_command = sprintf( 'sudo mysqlhotcopy %s %s --user=%s --password=%s', $backup_db_name, $copy_db_name, $user_name, $db_password );
-        
+        $shell_command = sprintf( 'sudo mysqlhotcopy %s %s --allowold --user=%s --password=%s', $backup_db_name, $copy_db_name, $user_name, $db_password );
 
         if ( isset( $assoc_args['host'] ) ) {
             $shell_command .= sprintf( ' --host=%s', $assoc_args['host'] );
@@ -54,7 +53,7 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         if ( isset( $assoc_args['chroot'] ) ) {
             $shell_command .= sprintf( ' --chroot=%s', $assoc_args['chroot'] );
         }
-
+        
         WP_CLI::line( shell_exec( $shell_command ) );
     }
 }
