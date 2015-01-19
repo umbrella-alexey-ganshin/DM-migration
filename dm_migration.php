@@ -56,6 +56,38 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         
         WP_CLI::line( shell_exec( $shell_command ) );
     }
+
+    /**
+     * Creates a copy of backup DB
+     *
+     * ## OPTIONS
+     * 
+     * --filepath
+     * : Output file path
+     *
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration make_hairstyle_csv hairstyle.csv
+     *
+     * @synopsis [--filepath=<filepath>]
+     */
+    public function make_hairstyle_csv( $args, $assoc_args ) {
+        $filepath = ( isset( $assoc_args['filepath'] ) ) ? $assoc_args['filepath'] : 'hairstyles.csv';
+        $filestream = fopen( $filepath, 'w' );
+        
+        $hairstyle_terms = get_terms( 'hairstyle_category' );
+        foreach( $hairstyle_terms as $term ) {
+            $term_csv_representation = array( $term->term_id, $term->name, '', '', '', '' );
+            
+            fputcsv( $filestream, $term_csv_representation );
+            
+            WP_CLI::success( sprintf( 'Term with "%s" ID, "%s"', $term->term_id, $term->name ) );
+        }
+        
+        fclose( $filestream );
+
+        WP_CLI::success( 'Done without errors' );
+    }
 }
 
 WP_CLI::add_command( 'dm_migration', 'DailyMakeover_Migration' );
