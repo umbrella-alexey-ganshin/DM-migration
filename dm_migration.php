@@ -126,8 +126,8 @@ class DailyMakeover_Migration extends WP_CLI_Command {
             'mobilegalleryimage'
         ) );
 
-        $users_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] : 'users_with_posts.csv';
-        $users_meta_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] : 'users_with_posts_meta.csv';
+        $users_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] . 'users_with_posts.csv' : 'users_with_posts.csv';
+        $users_meta_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] . 'users_with_posts_meta.csv' : 'users_with_posts_meta.csv';
         
         $users_filestream = fopen( $users_filepath, 'w' );
         $users_meta_filestream = fopen( $users_meta_filepath, 'w' );
