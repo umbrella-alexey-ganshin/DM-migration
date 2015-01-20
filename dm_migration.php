@@ -95,23 +95,24 @@ class DailyMakeover_Migration extends WP_CLI_Command {
     }
 
     /**
-     * Sets an array with users that has a posts
+     * Makes a CSV file with list of users that has a posts
      *
      * ## OPTIONS
      *
      * --number
      * : Count of the users to query
      * 
+     * --path
+     * : Path to output a CSV
+     * 
      * ## EXAMPLES
      *
-     * wp --require=dm_migration.php dm_migration get_array_of_users_with_posts 200
+     * wp --require=dm_migration.php dm_migration get_array_of_users_with_posts 200 --path=/home/user/
      *
-     * @synopsis [<number>]
+     * @synopsis [<number>] [--path=<path>]
      */
-    public function get_array_of_users_with_posts( $args, $assoc_args ) {
+    public function make_users_csv( $args, $assoc_args ) {
         $users = get_users( array( 'number' => isset( $args[0] ) ? $args[0] : '' ) );
-        
-        $users_with_posts = array();
         
         $post_type_arg = $this->get_blogs_post_types_names();
         $post_type_arg = array_merge( $post_type_arg, array(
@@ -124,6 +125,14 @@ class DailyMakeover_Migration extends WP_CLI_Command {
             'hairstyles',
             'mobilegalleryimage'
         ) );
+
+        $users_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] : 'users_with_posts.csv';
+        $users_meta_filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] : 'users_with_posts_meta.csv';
+        
+        $users_filestream = fopen( $users_filepath, 'w' );
+        $users_meta_filestream = fopen( $users_meta_filepath, 'w' );
+        
+        $added_users_count = 0;
         
         foreach( $users as $user ) {
             $args = array(
@@ -136,13 +145,25 @@ class DailyMakeover_Migration extends WP_CLI_Command {
             wp_reset_query();
             
             if ( ! empty( $posts_query->posts ) ) {
-                $users_with_posts[] = $user;
+                $user_meta = get_user_meta( $user->ID );
+                
+                fputcsv( $users_filestream, array(
+                    $user->ID,
+                    $user->user_login,
+                    $user->user_email,
+                    $user->first_name,
+                    $user->last_name
+                ) );
+
+                fputcsv( $users_meta_filestream, $user_meta );
 
                 WP_CLI::success( sprintf( 'User "%s" with %s posts has been added', $user->user_nicename, count( $posts_query->posts ) ) );
+
+                $added_users_count++;
             }
         }
 
-        WP_CLI::success( sprintf( '%s users has been added',  count( $users_with_posts ) ) );
+        WP_CLI::success( sprintf( '%s users has been added',  count( $added_users_count ) ) );
     }
 
     /**
