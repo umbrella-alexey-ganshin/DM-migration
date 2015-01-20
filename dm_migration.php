@@ -93,6 +93,101 @@ class DailyMakeover_Migration extends WP_CLI_Command {
 
         WP_CLI::success( 'Done without errors' );
     }
+
+    /**
+     * Sets an array with users that has a posts
+     *
+     * ## OPTIONS
+     *
+     * --number
+     * : Count of the users to query
+     * 
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration get_array_of_users_with_posts 200
+     *
+     * @synopsis [<number>]
+     */
+    public function get_array_of_users_with_posts( $args, $assoc_args ) {
+        $users = get_users( array( 'number' => isset( $args[0] ) ? $args[0] : '' ) );
+        
+        $users_with_posts = array();
+        
+        $post_type_arg = $this->get_blogs_post_types_names();
+        $post_type_arg = array_merge( $post_type_arg, array(
+            'post',
+            'option-tree',
+            'beauty-tips',
+            'bloggerati',
+            'makeovergallery',
+            'mobile_app',
+            'hairstyles',
+            'mobilegalleryimage'
+        ) );
+        
+        foreach( $users as $user ) {
+            $args = array(
+                'author'       => $user->ID,
+                'hide_empty'   => false,
+                'post_status'  => 'any',
+                'post_type'    => $post_type_arg
+            );
+            $posts_query = new WP_Query( $args );
+            wp_reset_query();
+            
+            if ( ! empty( $posts_query->posts ) ) {
+                $users_with_posts[] = $user;
+
+                WP_CLI::success( sprintf( 'User "%s" with %s posts has been added', $user->user_nicename, count( $posts_query->posts ) ) );
+            }
+        }
+
+        WP_CLI::success( sprintf( '%s users has been added',  count( $users_with_posts ) ) );
+    }
+
+    /**
+     * @return array
+     */
+    private function get_blogs_post_types_names() {
+        $blogs = array(
+            'Backstage Beauty',
+            'Beauty On A Dime',
+            'Beauty Street',
+            'Fall Trend Watch',
+            'Holiday Feature',
+            'HUEman Behavior',
+            'In His Beauty Universe',
+            'Now That\'s A Makeover',
+            'Positively Beautiful',
+            'Press Room',
+            'Summer of Color',
+            'These Lips are Made for Glossin',
+            'Wedding Beauty'
+        );
+        
+        $post_types_names = array();
+        
+        foreach ( $blogs as $blog ) {
+            $lowercase = str_replace( "'", '', strtolower( $blog ) );
+            $posttypename = str_replace( ' ', '-', $lowercase );
+
+            if ( $blog == 'These Lips are Made for Glossin' ) {
+                $posttypename = 'lips-for-glossin';
+            }
+
+            if ( $blog == 'In His Beauty Universe' ) {
+                $posttypename = 'his-beauty-universe';
+            }
+
+            if ( $blog == 'Backstage Beauty' ) {
+                $posttypename = 'fashion-week';
+            }
+
+            $post_types_names[] = $posttypename;
+        }
+        
+        return $post_types_names;
+    }
 }
 
 WP_CLI::add_command( 'dm_migration', 'DailyMakeover_Migration' );
