@@ -167,6 +167,96 @@ class DailyMakeover_Migration extends WP_CLI_Command {
     }
 
     /**
+     * Makes a CSV file with list of hairtyles dates
+     *
+     * ## OPTIONS
+     *
+     * --path
+     * : Path to output a CSV
+     *
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration make_hairstyles_dates_csv --path=/home/user/
+     *
+     * @synopsis [--path=<path>]
+     */
+    public function make_hairstyles_dates_csv( $args, $assoc_args ) {
+        $filepath = ( isset( $assoc_args['path'] ) ) ? $assoc_args['path'] : 'hairstyles_dates.csv';
+        $filestream = fopen( $filepath, 'w' );
+        
+        $filewitherrors = fopen( 'hairstyles_dates_errors.csv', 'w' );
+
+        $posts_query = new WP_Query( array(
+            'post_type'      => 'hairstyles',
+            'post_status'    => 'any',
+            'posts_per_page' => -1
+        ) );
+        
+        $succeded_posts = 0;
+
+        while( $posts_query->have_posts() ) {
+            $posts_query->the_post();
+            $post = get_post();
+            
+            $date_substr_start = strrpos( $post->post_title, '(' ) + 1;
+            $date_substr_length = strrpos( $post->post_title, ')' ) - $date_substr_start;
+            $date_string = trim( substr( $post->post_title, $date_substr_start, $date_substr_length ) );
+            
+            $date = DateTime::createFromFormat( 'M j, Y', $date_string );
+
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'M Y', $date_string );
+            }
+            
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'M j Y', $date_string );
+            }
+
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'F j, Y', $date_string );
+            }
+
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'F j Y', $date_string );
+            }
+
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'F jS, Y', $date_string );
+            }
+
+            if ( ! $date ) {
+                $date = DateTime::createFromFormat( 'F jS Y', $date_string );
+            }
+            
+            if ( ! $date ) {
+                WP_CLI::warning( sprintf( 'Can\'t process the "%s" date format', $date_string ) );
+
+                fputcsv( $filewitherrors, array( $post->ID, $post->post_title, '', '', '' ) );
+                
+                continue;
+            }
+
+            $day   = $date->format( 'd' );
+            $month = $date->format( 'm' );
+            $year  = $date->format( 'Y' );
+            
+            if ( $year == '0006' ) {
+                var_dump( $date_string . ' ' . $date->format( 'm d Y' )  );
+                die();
+            }
+            
+            fputcsv( $filestream, array( $post->ID, $post->post_title, $day, $month, $year ) );
+
+            WP_CLI::success( sprintf( 'Added post with "%s" ID, "%s" day, "%s" month, %s year', $post->ID, $day, $month, $year ) );
+            $succeded_posts++;
+        }
+        
+        wp_reset_query();
+        fclose( $filestream );
+        WP_CLI::success( sprintf( 'Done without errors. Succeded %s%% posts. %s dates has not been added because of the date format' , ( $succeded_posts / $posts_query->post_count ) * 100, $posts_query->post_count - $succeded_posts ) );
+    }
+
+    /**
      * @return array
      */
     private function get_blogs_post_types_names() {
