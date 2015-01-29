@@ -58,6 +58,53 @@ class DailyMakeover_Migration extends WP_CLI_Command {
     }
 
     /**
+     * Makes a CSV file with list of VMO attachments (that has a "Photo" prefix)
+     *
+     * ## OPTIONS
+     * 
+     * --filename
+     * : Output file path
+     *
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration make_vmo_attachments_csv --filename=vmo_attachments.csv
+     *
+     * @synopsis [--filename=<filename>]
+     */
+    public function make_vmo_attachments_csv( $args, $assoc_args ) {
+        
+        $filepath = ( isset( $assoc_args['filename'] ) ) ? $assoc_args['filename'] : 'vmo_attachments.csv';
+        $filestream = fopen( $filepath, 'w' );
+        
+        $args = array(
+            'hide_empty'     => false,
+            'post_type'      => 'attachment',
+            'post_status'    => 'any',
+            's'              => 'photo',
+            'posts_per_page' => -1
+        );
+        
+        $posts_query = new WP_Query( $args );
+
+        while ( $posts_query->have_posts() ) {
+            $posts_query->the_post();
+            $post = get_post();
+            
+            if ( ! preg_match('/(photo)$/', $post->post_title ) ) {
+                continue;
+            }
+
+            WP_CLI::success( sprintf( 'Found VMO attachment with "%s" title', $post->post_title ) );
+            
+            $result_attachment = array( $post->ID, wp_get_attachment_url( $post->ID ) );
+
+            fputcsv( $filestream, $result_attachment );
+        }
+        
+        fclose( $filestream );
+    }
+
+    /**
      * Creates a copy of backup DB
      *
      * ## OPTIONS
