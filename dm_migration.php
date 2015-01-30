@@ -299,6 +299,121 @@ class DailyMakeover_Migration extends WP_CLI_Command {
         
         return $post_types_names;
     }
+
+    /**
+    *   Live mode flag
+    */
+    private $live_mode = false;
+
+    /**
+     * Makes a CSV file with list of hairtyles dates
+     *
+     * ## OPTIONS
+     *
+     * --live
+     * : In live mode - data is changing
+     *
+     * ## EXAMPLES
+     *
+     * wp --require=dm_migration.php dm_migration convert_galleries
+     *
+     * @synopsis [--live]
+     */
+    public function convert_galleries( $args, $assoc_args ) {
+        //Init variables
+        $this->live_mode = isset($assoc_args['live']) ? true : false;
+        $posts_per_page = 100;
+        $page = 1;
+        $new_slideshow_posts = array();
+        $fake_slideshow_posts = array();
+
+        WP_CLI::line('===================== Start search regular and fake slideshows =====================' . "\n");    
+        do {
+            $posts = get_posts( array(
+                'posts_per_page' => $posts_per_page,
+                'paged' => $page,
+            ));
+
+            foreach ($posts as $post) {
+                //Detect regular slideshow by post meta
+                $slideshow_meta = get_post_meta( $post->ID, 'mos_slideshow', true);
+                if ( $slideshow_meta ) {
+                    $new_slideshow_posts[] = $post->ID;
+                    $this->process_regular_slideshow( $post, $slideshow_meta );
+                }
+
+                //Detect fake slideshow by 
+                if (strpos($post->post_content, 'id="slideShow"') !== FALSE) {
+                    WP_CLI::line('Post with fake slideshow: ' . $post->ID);
+                    $fake_slideshow_posts[] = $post->ID;
+                }
+            }
+         
+            $page++;
+         
+            // Free up memory
+            //$this->stop_the_insanity();
+        } while ( count( $posts ) );
+
+        WP_CLI::line('===================== Count regular slideshows: '.count($new_slideshow_posts).' =====================');
+        WP_CLI::line('===================== Count fake slideshows: '.count($fake_slideshow_posts).' =====================');
+
+    }
+
+    /**
+    *   Create smart gallery from DM regular slideshow
+    */
+    private function process_regular_slideshow( $post, $current_slideshow_meta ) {
+
+        WP_CLI::line('===================== Detect post with regular slideshow: ' . $post->ID . ' =====================');
+
+        $smart_gellery_title = $post->post_title;
+        WP_CLI::line('New smart gallery title: ' . $smart_gellery_title . "\n");
+
+        $smart_gellery_slides = array();        
+        WP_CLI::line('Slides:');
+        foreach ($current_slideshow_meta as $current_slide) {
+            $attachmetn_id = $current_slide['image'];
+            $smart_gellery_slides[] = array(
+                'title'         => $current_slide['alt'],
+                'source'        => $current_slide['link'],
+                'author'        => '',
+                'credit'        => $current_slide['copyright'],
+                'attachment_id' => $attachmetn_id,
+                'caption'       => $current_slide['caption'],
+                'is_hidden'     => 0,
+            );
+
+            WP_CLI::line('=========== New smart gallery slide ===========');
+            WP_CLI::line("      Title: " . $current_slide['alt']);
+            WP_CLI::line("      Source: " . $current_slide['link']);
+            WP_CLI::line("      Author: ");
+            WP_CLI::line("      Credit: " . $current_slide['copyright']);
+            WP_CLI::line("      Attachment Id: " . $attachmetn_id);
+            WP_CLI::line("      Caption: " . $current_slide['caption']);
+            WP_CLI::line("      Is Hidden: False \n");
+        }
+        
+        $this->create_smart_gallery_For_post( $post->ID, $smart_gellery_title, $smart_gellery_slides );
+        die();
+    }
+
+    private function create_smart_gallery( $post_id, $title, $slides ) {
+        if ( $this->live_mode ) {
+            $new_smart_gallery_id = wp_insert_post( array(
+                'post_title'    => $title,
+                'post_status'   => 'publish',
+                'post_type'     =>  'smart-gallery',
+            ) );
+
+            if ($new_smart_gallery_id == 0 OR (is_object($new_smart_gallery_id) AND $new_smart_gallery_id instanceof WP_Error) ) {
+                WP_CLI::warning("Smart gallery not created");
+                return;
+            }
+            update_post_meta( $new_smart_gallery_id, 'slides', $slides );
+            WP_CLI::success("Created new smart gallery with id: $new_smart_gallery_id");
+        }
+    }
 }
 
 WP_CLI::add_command( 'dm_migration', 'DailyMakeover_Migration' );
